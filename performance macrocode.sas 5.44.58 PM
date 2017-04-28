@@ -1,0 +1,102 @@
+/*subset Code By Meng*/
+%let path=/folders/myfolders/loan_portfolio; /*Set your path here*/
+%let dataset=/folders/myfolders/loan_portfolio/credit.sas7bdat; /*Choose the dataset here*/
+ 
+libname samir "&path";
+
+
+
+/****table1********************/
+
+%macro excel1(x,f);
+data subset;
+set samir.&dataset;
+    &x=propcase(&x);
+run;
+
+proc sql;
+title "Performance of &x";
+create table newc(drop=&f) as
+select &x, Countsum as Count, Count/Countsum as bad format percent8.0 from
+(select &x, &f, count(&f) as Count, Countsum   from (select &x, &f, count(&f) as Countsum  from subset
+	group by &x)
+	group by &x, &f)
+	group by &x
+	having &f =1;
+quit;
+
+
+
+data newcr label;
+	set work.newc;
+	label bad='Bad Performance';
+	label &x=&x;
+run;
+
+ods HTML file="&&path/table1.xls";
+proc print data=work.newcr label noobs;
+run;
+ods HTML close; 
+
+%mend excel1;
+
+
+/********table2****************/ 
+%macro excel2(y,z,g);
+data subsetr;
+set samir.&dataset;
+    &y=propcase(&y);
+	&z=propcase(&z);
+run;
+
+proc format;
+   value missing .='N/A'
+   other= [percent8.0];
+run;
+
+
+proc sql;
+create table ctmp as 
+select distinct &y, &z, perf from (
+
+	select  *, sum(&g)/sum as perf format percent8.0
+	from(
+		select *, count(*) as sum from subsetr
+		group by &y, &z)
+	group by &y, &z)
+
+group by &y, &z;
+quit;
+
+
+proc transpose DATA = ctmp                                                                                                                                        
+	OUT = cperf(drop=_NAME_);                                                                                                                                       
+	BY &y;                                                                                                                                                                 
+	VAR perf;                                                                                                                                                        
+	ID &z;  
+format perf missing.;
+run;  
+
+data cperfr label;
+	set work.cperf;
+		title "Performance of &y *&z";
+		label &y= "&y/&z";
+run;
+
+
+ods HTML file="&path/table2.xls";
+	proc print data=work.cperfr label noobs;
+	run;
+ods HTML close; 
+%mend excel2;
+
+%excel1(checking,Goodbad); /*Put the variable at the first place, formance column at the second place(only 0,1). Make sure captical the first letter */
+%excel2(Purpose,Checking,Goodbad);
+/*Put the first variable at the 1 place, out as row
+Put the second variable at the 2 place, output as column
+Formance column at the 3 place(only 0,1) 
+Make sure captical the first letter */
+
+
+
+
